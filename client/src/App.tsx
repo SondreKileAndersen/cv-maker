@@ -29,7 +29,7 @@ const DEFAULT_FORMAT_SETTINGS: CvFormatSettings = {
   paragraphSize: 11,
   experienceGap: 16,
   experienceElementGap: 5,
-  titleUnderlineGap: 0,
+  titleUnderlineGap: 1,
   accentColor: '#ffae3d',
   nameColor: '#ffffff',
   personalTextColor: '#d3d3d3',
@@ -49,6 +49,10 @@ const DEFAULT_FORMAT_SETTINGS: CvFormatSettings = {
   sectionTitleAfterGap: 18,
   qualificationTitleDescriptionGap: 18
 };
+
+function normalizeFormatSettings(settings?: Partial<CvFormatSettings>): CvFormatSettings {
+  return { ...DEFAULT_FORMAT_SETTINGS, ...settings, titleUnderlineGap: 1 };
+}
 const UNDO_HISTORY_LIMIT = 100;
 
 type AppHistorySnapshot = {
@@ -210,7 +214,7 @@ export default function App() {
   const [pendingMasterAction, setPendingMasterAction] = useState<{ action: () => void; session: MasterEditSession; x: number; y: number } | null>(null);
   const [formatPanelOpen, setFormatPanelOpen] = useState(true);
   const [formatPanelClosing, setFormatPanelClosing] = useState(false);
-  const [formatSettings, setFormatSettings] = useState<CvFormatSettings>(() => ({ ...DEFAULT_FORMAT_SETTINGS, ...document.formatSettings }));
+  const [formatSettings, setFormatSettings] = useState<CvFormatSettings>(() => normalizeFormatSettings(document.formatSettings));
   const masterEntryEditing = editingMasterEntrySectionIds.length > 0;
   const handleMasterEntryEditingChange = useCallback((sectionId: string, active: boolean, session?: MasterEditSession) => {
     if (active) {
@@ -246,7 +250,7 @@ export default function App() {
       id: source.activeCvVersionId ?? 'cv-1',
       name: 'CV 1',
       selectedBlockIds: getSavedCvSelections(source),
-      formatSettings: { ...DEFAULT_FORMAT_SETTINGS, ...source.formatSettings },
+      formatSettings: normalizeFormatSettings(source.formatSettings),
       overrides: source.cvVersionOverrides?.[ACTIVE_CV_VERSION_ID] ?? { text: {}, descriptionVariantIds: {}, hiddenFields: {} },
       customCategorySelectionIds: source.customCategorySelectionIds ?? [],
       qualificationDescription: source.qualificationDescription ?? '',
@@ -288,7 +292,7 @@ export default function App() {
       activeCvVersionId: version.id,
       cvVersions: versions,
       selectedBlockIds: [...version.selectedBlockIds],
-      formatSettings: { ...version.formatSettings },
+      formatSettings: normalizeFormatSettings(version.formatSettings),
       cvVersionOverrides: {
         ...source.cvVersionOverrides,
         [ACTIVE_CV_VERSION_ID]: structuredClone(version.overrides)
@@ -307,7 +311,7 @@ export default function App() {
     setActiveCvVersionId(activeVersion.id);
     setDocument(prepared);
     setCvBlockIds([...activeVersion.selectedBlockIds]);
-    setFormatSettings({ ...DEFAULT_FORMAT_SETTINGS, ...activeVersion.formatSettings });
+    setFormatSettings(normalizeFormatSettings(activeVersion.formatSettings));
   }
 
   useEffect(() => {
@@ -815,11 +819,8 @@ export default function App() {
   }
 
   function startWithFilledExample() {
-    // This is deliberately not connected to a storage provider. It is a safe
-    // sandbox for testing the CV builder and its drag-and-drop behaviour.
     const example = structuredClone(withRequiredSections(exampleCv));
-    setDocument(example);
-    setCvBlockIds(getSavedCvSelections(example));
+    applyLoadedDocument(example);
     setStatus('Eksempelprosjektet er åpnet. Endringer lagres ikke før du velger en lagringsmåte.');
     setWelcomeOpen(false);
   }
@@ -1619,7 +1620,6 @@ export default function App() {
               <FormatControl label="Seksjonstittel" value={formatSettings.sectionTitleSize} min={9} max={22} step={1} onChange={sectionTitleSize => setFormatSettings(current => ({ ...current, sectionTitleSize }))} />
               <FormatControl label="Deltittel" value={formatSettings.subtitleSize} min={8} max={18} step={1} onChange={subtitleSize => setFormatSettings(current => ({ ...current, subtitleSize }))} />
               <FormatControl label="Paragraf" value={formatSettings.paragraphSize} min={8} max={16} step={1} onChange={paragraphSize => setFormatSettings(current => ({ ...current, paragraphSize }))} />
-              <FormatControl label="Tittel-underlinje avstand" value={formatSettings.titleUnderlineGap} min={-12} max={12} step={1} onChange={titleUnderlineGap => setFormatSettings(current => ({ ...current, titleUnderlineGap }))} />
               <FormatControl label="Avstand før kategoritittel" value={formatSettings.sectionTitleBeforeGap} min={0} max={48} step={1} onChange={sectionTitleBeforeGap => setFormatSettings(current => ({ ...current, sectionTitleBeforeGap }))} />
               <FormatControl label="Avstand etter kategoritittel" value={formatSettings.sectionTitleAfterGap} min={0} max={48} step={1} onChange={sectionTitleAfterGap => setFormatSettings(current => ({ ...current, sectionTitleAfterGap }))} />
               <FormatControl label="Avstand mellom Nøkkelkvalifikasjoner-tittel og beskrivelse" value={formatSettings.qualificationTitleDescriptionGap} min={0} max={48} step={1} onChange={qualificationTitleDescriptionGap => setFormatSettings(current => ({ ...current, qualificationTitleDescriptionGap }))} />

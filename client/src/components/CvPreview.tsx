@@ -814,7 +814,7 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
     '--cv-format-paragraph-size': `${formatSettings.paragraphSize * DOCUMENT_FONT_SCALE}px`,
     '--cv-format-experience-gap': `${formatSettings.experienceGap}px`,
     '--cv-format-experience-element-gap': `${formatSettings.experienceElementGap}px`,
-    '--cv-format-title-underline-gap': `${formatSettings.titleUnderlineGap}px`,
+    '--cv-format-title-underline-gap': '1px',
     '--cv-format-accent-color': formatSettings.accentColor,
     '--accent': formatSettings.accentColor,
     '--cv-format-name-color': formatSettings.nameColor,
