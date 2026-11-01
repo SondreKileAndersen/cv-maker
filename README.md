@@ -31,14 +31,12 @@ npm install
 
 ```powershell
 # Vindu 1: PDF-API
-cd server\CvBuilder.Api
-dotnet run
+cd "F:\9. Utvikling\CV_Kiwi\server\CvBuilder.Api"; dotnet run
 ```
 
 ```powershell
 # Vindu 2: nettsiden
-cd client
-npm.cmd run dev
+cd "F:\9. Utvikling\CV_Kiwi\client"; npm.cmd run dev
 ```
 
 Åpne [http://localhost:5173](http://localhost:5173).
@@ -46,7 +44,7 @@ npm.cmd run dev
 ### Før GitHub-push
 
 ```powershell
-cd C:\sti\til\cv-maker
+cd "F:\9. Utvikling\CV_Kiwi"
 npm.cmd --prefix client run build
 git status
 git add -A

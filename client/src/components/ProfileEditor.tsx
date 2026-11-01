@@ -24,6 +24,7 @@ const defaultFields: Array<[keyof Profile, string]> = [
 
 const fixedFields: Array<[keyof Profile, string]> = [
   ['fullName', 'Navn'],
+  ['title', 'Tittel'],
   ['birthDate', 'Fødselsdato'],
   ['address', 'Adresse'],
   ['phone', 'Telefon'],

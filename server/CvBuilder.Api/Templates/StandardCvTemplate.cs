@@ -90,7 +90,6 @@ public sealed class StandardCvTemplate : ICvPdfTemplate
                     col.Item().Text(part).FontSize(24).Bold().FontColor(Colors.White).LineHeight(1.08f);
 
                 col.Item().PaddingTop(9).Text(profile.Title).FontSize(12).Bold().FontColor(LightBody);
-                col.Item().PaddingTop(3).Text(profile.Organization).FontSize(10.98f).Bold().FontColor(LightBody);
             });
 
             row.ConstantItem(228).PaddingTop(21).Column(col =>

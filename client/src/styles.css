@@ -65,7 +65,6 @@
   --format-settings-gap: 10px;
   --preview-format-panel-width: 280px;
   /* Width of the blue Nøkkelkvalifikasjoner helper. Height follows its text. */
-  --qualification-key-guide-width: 142px;
   --date-year-field-width: 88px;
   --date-month-field-width: 116px;
   --master-selection-fill-height: calc(00% + var(--master-corner-size) + var(--master-corner-size));
@@ -1060,14 +1059,62 @@ textarea {
 .format-navigation-back svg { width: 25px; height: 25px; }
 .preview-format-control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 54px;
+  grid-template-columns: 54px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+  text-align: left;
   color: #536071;
   font-size: 12px;
   font-weight: 600;
 }
 .preview-format-control > input { display: none; }
+
+/* Hover guides stay in the preview and never affect pagination or printed PDFs. */
+@media screen {
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Linjeavstand"]:hover) .preview-document .cv-name,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Linjeavstand"]:hover) .preview-document .cv-contact,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Linjeavstand"]:hover) .preview-document .preview-entry,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Linjeavstand"]:hover) .preview-document .qualification-preview-description,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Navn"]:hover) .preview-document .preview-name,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Tittel under navn"]:hover) .preview-document .cv-name > .preview-editable:not(.preview-name),
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Avstand mellom navn og tittel"]:hover) .preview-document .cv-name,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Seksjonstittel"]:hover) .preview-document .cv-tab,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Deltittel"]:hover) .preview-document .cv-contact,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Deltittel"]:hover) .preview-document .preview-entry h4,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Paragraf"]:hover) .preview-document .preview-entry p,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Paragraf"]:hover) .preview-document .preview-entry-description,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Paragraf"]:hover) .preview-document .qualification-preview-description,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Avstand før kategoritittel"]:hover) .preview-document .cv-tab,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Avstand etter kategoritittel"]:hover) .preview-document .preview-section-group .cv-content,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Avstand mellom Nøkkelkvalifikasjoner-tittel og beskrivelse"]:hover) .preview-document .qualification-preview-content,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Avstand mellom erfaringer"]:hover) .preview-document .preview-entry,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Erfarings-element gap"]:hover) .preview-document .preview-entry > *,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Bildestørrelse"]:hover) .preview-document .cv-photo,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Avstand mellom bilde og tekst"]:hover) .preview-document .cv-photo,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Avstand mellom bilde og tekst"]:hover) .preview-document .cv-name,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Sidemarger"]:hover) .preview-document .cv-page,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Topp-/bunnmarg"]:hover) .preview-document .cv-page,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Personalia – luft over og under"]:hover) .preview-document .cv-header,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Organisasjon, dato og type på én linje – øvrige erfaringer"]:hover) .preview-document .preview-section-group .preview-entry-meta,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Kontrastfarge"]:hover) .preview-document .cv-photo,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Kontrastfarge"]:hover) .preview-document .preview-entry h4,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Kontrastfarge"]:hover) .preview-document .cv-contact svg,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Kontrastfarge"]:hover) .preview-document .cv-tab svg,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Navnefarge"]:hover) .preview-document .preview-name,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Personalia-detaljer"]:hover) .preview-document .cv-name > .preview-editable:not(.preview-name),
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Personalia-detaljer"]:hover) .preview-document .cv-contact,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Kategorititler"]:hover) .preview-document .cv-tab,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Erfaringstitler"]:hover) .preview-document .preview-entry h4,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Metadata og undertitler"]:hover) .preview-document .preview-entry-meta,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Beskrivelsestekst"]:hover) .preview-document .preview-entry-description,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Beskrivelsestekst"]:hover) .preview-document .qualification-preview-description,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Farge på lenker"]:hover) .preview-document a,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Ikoner på titler"]:hover) .preview-document .cv-tab,
+  :root:not(:has(.preview-format-number.is-pointer-active, .preview-format-number input:focus)):has(.preview-format-panel:not(.is-closing) [data-format-label="Ikoner på personalia"]:hover) .preview-document .cv-contact {
+    outline: 1.5px solid #2684ff;
+    outline-offset: 3px;
+  }
+}
 .preview-format-number {
   --drag-value-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='18' viewBox='0 0 28 18'%3E%3Cpath d='M3 9 11 3v12L3 9Z' fill='%23303845'/%3E%3Cpath d='M25 9 17 3v12l8-6Z' fill='%23303845'/%3E%3C/svg%3E") 14 9, ew-resize;
   display: grid;
@@ -1211,10 +1258,10 @@ textarea {
   background: var(--dark);
   box-shadow: 3px 4px 6px rgb(0 0 0 / 22%);
   display: grid;
-  grid-template-columns: calc(var(--cv-format-photo-size, 54px) + 24px) minmax(0, 1fr) minmax(132px, 42%);
+  grid-template-columns: calc(var(--cv-format-photo-size, 54px) + var(--cv-format-photo-text-gap, 32px) - 8px) minmax(0, 1fr) minmax(132px, 42%);
   column-gap: 8px;
   align-items: center;
-  padding: 10px var(--cv-format-page-margin, 18px);
+  padding: var(--cv-format-personal-padding-y, 10px) var(--cv-format-page-margin, 18px);
   color: white;
 }
 
@@ -1236,6 +1283,15 @@ textarea {
   object-fit: cover;
 }
 
+.cv-header-text {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: subgrid;
+  align-items: stretch;
+  align-self: center;
+  min-width: 0;
+}
+
 .cv-name {
   display: grid;
   align-content: center;
@@ -1248,8 +1304,8 @@ textarea {
 }
 
 .cv-name > .preview-editable {
-  margin-top: 5px;
-  font-size: var(--cv-format-subtitle-size, 8px);
+  margin-top: var(--cv-format-name-title-gap, 5px);
+  font-size: var(--cv-format-profile-title-size, 8px);
   color: var(--cv-format-personal-text-color, #d3d3d3);
   font-weight: 400;
 }
@@ -1259,7 +1315,7 @@ textarea {
   display: grid;
   min-width: 0;
   gap: 0px;
-  align-content: center;
+  align-content: space-between;
   justify-items: stretch;
   text-align: right;
   font-size: var(--cv-format-subtitle-size, 8px);
@@ -1363,6 +1419,7 @@ textarea {
 }
 
 .cv-content { padding: var(--cv-format-section-after-gap, 18px) var(--cv-format-page-margin, 24px) 18px; }
+.preview-section-group.is-continuation > .cv-content { padding-top: 0; }
 
 .qualification-preview-content {
   display: grid;
@@ -1461,66 +1518,9 @@ textarea {
   zoom: var(--preview-ui-inverse-zoom, 1);
 }
 
-.qualification-master-highlight {
-  position: relative;
-  justify-self: start;
-  display: inline-flex;
-  min-height: 23px;
-  align-items: center;
-  gap: 5px;
-  padding: 0 8px;
-  border: 1px solid var(--brand-color);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--brand-color-dark);
-  font: inherit;
-  font-size: 7.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
 
-.qualification-master-highlight.is-active {
-  background: var(--brand-color-soft-medium);
-}
 
-.qualification-master-highlight > .qualification-master-highlight-icon,
-.qualification-master-highlight > span {
-  position: relative;
-  z-index: 1;
-}
 
-.qualification-master-highlight-icon {
-  display: block;
-  width: 16px;
-  height: 10px;
-  flex: 0 0 16px;
-}
-
-.local-nav.is-qualification-picking {
-  box-shadow: inset 0 0 0 2px var(--brand-color);
-}
-
-.qualification-master-highlight.is-attention-pulse {
-  animation: qualification-button-attention 720ms linear;
-}
-
-.local-nav.is-qualification-attention .qualification-key-toggle {
-  animation: qualification-key-attention 720ms linear;
-}
-
-@keyframes qualification-button-attention {
-  0%, 100% { background: var(--brand-color-soft-medium); box-shadow: none; }
-  25%, 75% { background: var(--brand-color-soft-strong); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-color) 22%, transparent); }
-  50% { background: var(--brand-color-soft-medium); box-shadow: none; }
-}
-
-@keyframes qualification-key-attention {
-  0% { opacity: 0; transform: translateX(4px) scale(1); }
-  25% { opacity: 1; transform: translateX(4px) scale(1); }
-  50% { opacity: 0; transform: translateX(4px) scale(1); }
-  75% { opacity: 1; transform: translateX(4px) scale(1); }
-  100% { opacity: 0; transform: translateX(4px) scale(1); }
-}
 
 .qualification-preview-description {
   margin: 0;
@@ -1533,67 +1533,49 @@ textarea {
 .qualification-rich-line {
   display: block;
   min-height: 1em;
-}
-
-.qualification-preview-list {
-  display: grid;
-  gap: 0;
-}
-
-.qualification-preview-entry {
-  margin-bottom: max(0px, calc(var(--cv-format-experience-gap, 16px) - 10px));
-}
-
-.cv-content > .preview-entry:last-child,
-.qualification-preview-list > .preview-entry:last-child { margin-bottom: 0; }
-
-.qualification-preview-item {
-  display: grid;
-  grid-template-columns: 25px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
-}
-
-.qualification-preview-icon {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  border-radius: 4px;
-  background: var(--brand-color-soft-medium);
-  color: var(--brand-color-strong);
-}
-
-.qualification-preview-icon svg {
-  width: 15px;
-  height: 15px;
-}
-
-.qualification-preview-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.qualification-preview-copy strong {
-  color: var(--cv-format-entry-title-color, #111);
-  font-size: var(--cv-format-subtitle-size, 8px);
-  line-height: 1.2;
-}
-
-.qualification-preview-copy small,
-.qualification-preview-copy p {
-  margin: 0;
-  color: var(--cv-format-paragraph-color, var(--body));
-  font-size: var(--cv-format-paragraph-size, 7px);
-  line-height: var(--cv-format-line-height, 1.35);
-  font-weight: 400;
-}
+}.cv-content > .preview-entry:last-child { margin-bottom: 0; }
 
 .preview-entry {
   display: grid;
   gap: var(--cv-format-experience-element-gap, 5px);
   margin-bottom: max(0px, calc(var(--cv-format-experience-gap, 16px) - 10px));
+}
+
+/* Shared two-column layout for every CV entry, including print. */
+.preview-entry {
+  grid-template-columns: minmax(0, var(--cv-entry-column-width, 26%)) minmax(0, 1fr);
+  column-gap: var(--cv-entry-column-gap, 12px);
+  align-items: start;
+}
+
+.preview-entry-heading,
+.preview-entry-body {
+  display: grid;
+  min-width: 0;
+  gap: var(--cv-format-experience-element-gap, 2px);
+  overflow-wrap: anywhere;
+  font-size: var(--cv-format-paragraph-size, 7px);
+  line-height: var(--cv-format-line-height, 1.35);
+}
+
+.preview-entry .preview-entry-heading h4 {
+  display: block;
+  line-height: var(--cv-format-line-height, 1.35);
+}
+
+.preview-entry .preview-entry-heading p,
+.preview-entry .preview-entry-body p {
+  margin-top: 0;
+}
+
+.preview-entry-actions { grid-column: 1 / -1; }
+
+.preview-entry.is-single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.preview-entry.is-single-column:not(.is-editing) > .preview-entry-body:not(:has(.preview-field)) {
+  display: none;
 }
 
 .preview-entry h4,
@@ -1727,10 +1709,7 @@ textarea {
 
 .preview-entry-sort-zone > .preview-entry {
   margin-bottom: 0;
-}
-
-.cv-content > .preview-entry-sort-zone:last-child,
-.qualification-preview-list > .preview-entry-sort-zone:last-child {
+}.cv-content > .preview-entry-sort-zone:last-child {
   margin-bottom: 0;
 }
 
@@ -2743,6 +2722,15 @@ body {
   gap: 5px;
 }
 
+/* This row has no expand arrow and must not widen the other rows. */
+.master-nav-group.is-qualifications {
+  contain: inline-size;
+}
+
+.master-nav-group.is-qualifications .master-block > strong {
+  grid-column: 3 / -1;
+}
+
 .master-navigation {
   display: flex;
   height: auto;
@@ -3023,137 +3011,8 @@ body {
 .custom-selection-toggle svg { width: 17px; height: 17px; }
 .custom-selection-toggle.is-on { color: var(--brand-color); }
 .custom-selection-toggle:hover { background: color-mix(in srgb, var(--brand-color) 9%, transparent); color: var(--brand-color-dark); }
-.master-block.is-custom-picking,
-.master-block-child.is-custom-picking {
-  position: relative;
-  cursor: pointer;
-}
-
-.master-nav-group.is-qualification-disabled {
-  opacity: .36;
-  filter: grayscale(1);
-  pointer-events: none;
-  user-select: none;
-}
-
-.master-block.is-custom-picking {
-  grid-template-columns: 22px minmax(0, 1fr) 14px !important;
-  padding-right: 9px;
-}
-
-.master-block-child.is-custom-picking {
-  grid-template-columns: minmax(0, 1fr) !important;
-  padding-right: 30px;
-}
-
-.qualification-category {
-  gap: 9px;
-  padding: 9px;
-  border: 1px solid #dce4eb;
-  border-radius: 10px;
-}
-
-.qualification-category-heading {
-  display: grid;
-  grid-template-columns: 18px 20px minmax(0, 1fr);
-  align-items: center;
-  gap: 7px;
-  color: #536071;
-}
-
-.qualification-category-heading > svg {
-  width: 19px;
-  height: 19px;
-  color: var(--brand-color);
-}
-
-.qualification-category-editor {
-  display: grid;
-  gap: 8px;
-}
-
-.qualification-category-editor label {
-  display: grid;
-  gap: 4px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-}
 
 .cv-tab svg { width: 10px; height: 10px; flex: 0 0 10px; color: var(--accent); }
-
-.qualification-category-editor textarea {
-  min-height: 72px;
-  padding: 8px;
-  font-size: 12px;
-  line-height: 1.35;
-  resize: vertical;
-}
-
-.qualification-highlight-button {
-  border: 1px solid var(--brand-color);
-  border-radius: 7px;
-  padding: 8px;
-  background: #fff;
-  color: var(--brand-color-dark);
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.qualification-highlight-button:hover,
-.qualification-highlight-button.is-active {
-  background: var(--brand-color-soft-medium);
-}
-
-.qualification-selected-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.qualification-selected-items span {
-  max-width: 100%;
-  overflow: hidden;
-  border: 1px solid var(--brand-color-border);
-  border-radius: 999px;
-  padding: 3px 6px;
-  background: var(--brand-color-soft-medium);
-  color: var(--brand-color-dark);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.qualification-pick-spacer {
-  display: block;
-  width: 18px;
-  height: 18px;
-}
-
-.qualification-pick-arrow {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  right: 7px;
-  display: grid;
-  width: 18px;
-  height: 18px;
-  place-items: center;
-  color: var(--brand-color);
-  opacity: 0;
-  transform: translateY(-50%);
-  transition: opacity 100ms linear, color 100ms linear;
-}
-
-.qualification-pick-arrow svg { width: 16px; height: 16px; }
-
-.master-block.is-custom-picking:hover > .qualification-pick-arrow,
-.master-block-child.is-custom-picking:hover > .qualification-pick-arrow,
-.qualification-pick-arrow.is-selected { opacity: 1; }
-
-.qualification-pick-arrow.is-selected { color: #fff; }
 
 /* Let the Masterdata column be defined by its actual content, not a fixed pixel track. */
 .cv-mode .master-navigation,
@@ -3445,7 +3304,6 @@ body {
 }
 
 .master-block-child {
-  --qualification-key-mask-color: #fff;
   display: grid;
   width: 100%;
   min-width: 0;
@@ -3467,102 +3325,10 @@ body {
 }
 
 .toggle-builder .master-block-child {
-  grid-template-columns: 18px minmax(0, 1fr) 18px;
+  grid-template-columns: 18px minmax(0, 1fr);
   column-gap: 8px;
   cursor: default;
 }
-
-.toggle-builder .master-block-child.has-qualification-key {
-  grid-template-columns: 18px minmax(0, 1fr) 18px;
-}
-
-.qualification-key-toggle {
-  position: relative;
-  display: grid;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--brand-color-strong);
-  cursor: pointer;
-  opacity: 0;
-  transform: translateX(4px) scale(.86);
-  transition: opacity 100ms linear, transform 100ms linear, background 100ms linear, color 100ms linear;
-}
-
-.qualification-key-toggle::before {
-  content: '';
-  position: absolute;
-  z-index: 0;
-  top: -4px;
-  right: -4px;
-  bottom: -4px;
-  left: -16px;
-  border-radius: 0 6px 6px 0;
-  background: linear-gradient(90deg, transparent 0%, var(--qualification-key-mask-color) 48%, var(--qualification-key-mask-color) 100%);
-  pointer-events: none;
-}
-
-.qualification-key-toggle svg {
-  position: relative;
-  z-index: 1;
-  width: 16px;
-  height: 16px;
-  transform: rotate(45deg) scale(1);
-  transition: transform 120ms ease-out;
-}
-
-.master-block-child:hover .qualification-key-toggle,
-.qualification-key-toggle:focus-visible,
-.qualification-key-toggle.is-selected {
-  opacity: 1;
-  transform: translateX(4px) scale(1);
-}
-
-.qualification-key-toggle:hover {
-  transform: translateX(4px) scale(1);
-}
-
-.qualification-key-toggle:hover svg {
-  transform: rotate(45deg) scale(1.28);
-}
-
-.qualification-key-toggle.is-selected {
-  background: var(--brand-color-soft-medium);
-}
-
-.qualification-key-toggle.is-selected:hover {
-  transform: translateX(4px) scale(1);
-}
-
-.qualification-key-toggle.is-selected { color: var(--brand-color-deep); }
-
-.qualification-key-guide {
-  position: fixed;
-  z-index: calc(var(--layer-format-menu) - 1);
-  width: var(--qualification-key-guide-width);
-  min-height: 0;
-  padding: 13px 12px;
-  border: 1px solid color-mix(in srgb, var(--brand-color) 72%, white);
-  border-radius: 10px;
-  background: var(--brand-color);
-  box-shadow: 0 7px 18px rgb(15 23 42 / 16%);
-  color: #fff;
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.35;
-  text-align: left;
-  white-space: normal;
-  transform: translateY(-50%);
-  display: none;
-}
-
-.qualification-key-guide:hover { background: var(--brand-color-strong); }
 
 .cv-include-toggle {
   display: grid;
@@ -3598,7 +3364,7 @@ body {
   transform: scale(.82);
 }
 
-.master-block-child:hover { --qualification-key-mask-color: var(--brand-color-soft); border-color: var(--brand-color-border-soft); background: var(--brand-color-soft); color: var(--brand-color-dark); }
+.master-block-child:hover { border-color: var(--brand-color-border-soft); background: var(--brand-color-soft); color: var(--brand-color-dark); }
 .master-block-child-handle { color: #a8b2bf; font-size: 10px; }
 .master-block-child > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -3764,24 +3530,6 @@ body {
 
 .master-block-icon {
   color: #536071;
-}
-
-.local-nav:not(.is-dimmed) .master-block.is-qualification-highlight,
-.local-nav:not(.is-dimmed) .master-block-child.is-qualification-highlight {
-  border-color: var(--brand-color);
-  background: var(--brand-color);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-color-deep) 12%, transparent);
-}
-
-.local-nav:not(.is-dimmed) .master-block.is-qualification-highlight strong,
-.local-nav:not(.is-dimmed) .master-block.is-qualification-highlight span,
-.local-nav:not(.is-dimmed) .master-block-child.is-qualification-highlight span {
-  color: #fff;
-}
-
-.toggle-builder .local-nav.is-qualification-picking .master-block-child.is-custom-picking {
-  cursor: pointer;
 }
 
 .master-block-icon {
@@ -4575,8 +4323,7 @@ body {
   .preview-order-controls,
   .preview-entry-actions,
   .preview-entry-done,
-  .preview-entry-cancel,
-  .qualification-key-guide {
+  .preview-entry-cancel {
     display: none !important;
   }
 

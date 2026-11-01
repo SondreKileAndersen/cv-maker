@@ -24,11 +24,17 @@ const ACTIVE_CV_VERSION_ID = 'current';
 const DEFAULT_FORMAT_SETTINGS: CvFormatSettings = {
   lineHeight: 1.45,
   nameSize: 22,
+  profileTitleSize: 11,
+  nameTitleGap: 5,
+  personalVerticalPadding: 10,
+  photoTextGap: 32,
   sectionTitleSize: 12,
   subtitleSize: 11,
   paragraphSize: 11,
   experienceGap: 16,
-  experienceElementGap: 5,
+  experienceElementGap: 2,
+  entryColumnWidth: 26,
+  entryColumnGap: 12,
   titleUnderlineGap: 1,
   accentColor: '#ffae3d',
   nameColor: '#ffffff',
@@ -36,11 +42,10 @@ const DEFAULT_FORMAT_SETTINGS: CvFormatSettings = {
   sectionTitleColor: '#ffffff',
   entryTitleColor: '#000000',
   metadataColor: '#7a7a7a',
-  paragraphColor: '#7a7a7a',
+  paragraphColor: '#000000',
   photoSize: 54,
   showTitleIcons: false,
   showPersonalIcons: true,
-  inlineQualificationMetadata: false,
   inlineExperienceMetadata: false,
   linkColor: '#007e7a',
   pageMargins: 24,
@@ -51,7 +56,11 @@ const DEFAULT_FORMAT_SETTINGS: CvFormatSettings = {
 };
 
 function normalizeFormatSettings(settings?: Partial<CvFormatSettings>): CvFormatSettings {
-  return { ...DEFAULT_FORMAT_SETTINGS, ...settings, titleUnderlineGap: 1 };
+  const validSettings = Object.fromEntries(Object.entries(settings ?? {}).filter(([key, value]) => {
+    const fallback = DEFAULT_FORMAT_SETTINGS[key as keyof CvFormatSettings];
+    return typeof value === typeof fallback && (typeof value !== 'number' || Number.isFinite(value));
+  }));
+  return { ...DEFAULT_FORMAT_SETTINGS, ...validSettings, titleUnderlineGap: 1 };
 }
 const UNDO_HISTORY_LIMIT = 100;
 
@@ -158,6 +167,8 @@ export default function App() {
   const googleDrive = useMemo(() => new GoogleDriveProjectStore(), []);
   const [storeState, setStoreState] = useState<ProjectStoreState>({ supported: false, connected: false });
   const [googleDriveState, setGoogleDriveState] = useState<GoogleDriveState>(googleDrive.state);
+  const [googleDriveConnecting, setGoogleDriveConnecting] = useState(false);
+  const [googleDriveError, setGoogleDriveError] = useState('');
   const [storage, setStorage] = useState<'local' | 'browser' | 'google' | null>(null);
   const [storageHydrated, setStorageHydrated] = useState(false);
   const [storageMenuOpen, setStorageMenuOpen] = useState(false);
@@ -165,9 +176,6 @@ export default function App() {
   const [customSectionTitle, setCustomSectionTitle] = useState('');
   const [customCategoryCreator, setCustomCategoryCreator] = useState<'nav' | 'overlay' | null>(null);
   const [cvBlockIds, setCvBlockIds] = useState<string[]>(() => getSavedCvSelections(withRequiredSections(USE_FILLED_TEST_PROJECT ? exampleCv : blankCv)));
-  const [qualificationAttention, setQualificationAttention] = useState(false);
-  const qualificationAttentionTimerRef = useRef<number | null>(null);
-  const [pendingQualificationAttentionBlockId, setPendingQualificationAttentionBlockId] = useState<string | null>(null);
   const [expandedMasterBlockIds, setExpandedMasterBlockIds] = useState<string[]>([]);
   const [editingMasterEntrySectionIds, setEditingMasterEntrySectionIds] = useState<string[]>([]);
   const [editingMasterBlockId, setEditingMasterBlockId] = useState<string | null>(null);
@@ -215,6 +223,13 @@ export default function App() {
   const [formatPanelOpen, setFormatPanelOpen] = useState(true);
   const [formatPanelClosing, setFormatPanelClosing] = useState(false);
   const [formatSettings, setFormatSettings] = useState<CvFormatSettings>(() => normalizeFormatSettings(document.formatSettings));
+  useLayoutEffect(() => {
+    // Also repair state preserved by hot reload when new controls are added.
+    const normalized = normalizeFormatSettings(formatSettings);
+    if (Object.keys(normalized).some(key => normalized[key as keyof CvFormatSettings] !== formatSettings[key as keyof CvFormatSettings])) {
+      setFormatSettings(normalized);
+    }
+  }, [formatSettings]);
   const masterEntryEditing = editingMasterEntrySectionIds.length > 0;
   const handleMasterEntryEditingChange = useCallback((sectionId: string, active: boolean, session?: MasterEditSession) => {
     if (active) {
@@ -252,7 +267,7 @@ export default function App() {
       selectedBlockIds: getSavedCvSelections(source),
       formatSettings: normalizeFormatSettings(source.formatSettings),
       overrides: source.cvVersionOverrides?.[ACTIVE_CV_VERSION_ID] ?? { text: {}, descriptionVariantIds: {}, hiddenFields: {} },
-      customCategorySelectionIds: source.customCategorySelectionIds ?? [],
+      qualificationVisible: source.qualificationVisible,
       qualificationDescription: source.qualificationDescription ?? '',
       qualificationDescriptionLines: source.qualificationDescriptionLines
     }];
@@ -267,7 +282,7 @@ export default function App() {
       selectedBlockIds: [...cvBlockIds],
       formatSettings: { ...formatSettings },
       overrides: structuredClone(source.cvVersionOverrides?.[ACTIVE_CV_VERSION_ID] ?? { text: {}, descriptionVariantIds: {}, hiddenFields: {} }),
-      customCategorySelectionIds: [...(source.customCategorySelectionIds ?? [])],
+      qualificationVisible: source.qualificationVisible,
       qualificationDescription: source.qualificationDescription ?? '',
       qualificationDescriptionLines: source.qualificationDescriptionLines ? structuredClone(source.qualificationDescriptionLines) : undefined
     };
@@ -297,7 +312,7 @@ export default function App() {
         ...source.cvVersionOverrides,
         [ACTIVE_CV_VERSION_ID]: structuredClone(version.overrides)
       },
-      customCategorySelectionIds: [...version.customCategorySelectionIds],
+      qualificationVisible: version.qualificationVisible,
       qualificationDescription: version.qualificationDescription,
       qualificationDescriptionLines: version.qualificationDescriptionLines ? structuredClone(version.qualificationDescriptionLines) : undefined
     };
@@ -352,7 +367,7 @@ export default function App() {
       historyApplyingRef.current = true;
       setDocument(snapshot.document);
       setCvBlockIds([...snapshot.cvBlockIds]);
-      setFormatSettings({ ...snapshot.formatSettings });
+      setFormatSettings(normalizeFormatSettings(snapshot.formatSettings));
       setActiveCvVersionId(snapshot.activeCvVersionId);
     };
     const handleUndoRedo = (event: KeyboardEvent) => {
@@ -679,6 +694,9 @@ export default function App() {
   }
 
   async function connectGoogleDrive() {
+    if (googleDriveConnecting) return false;
+    setGoogleDriveConnecting(true);
+    setGoogleDriveError('');
     try {
       setStatus('Åpner Google-autorisasjon...');
       const state = await googleDrive.connect();
@@ -689,14 +707,19 @@ export default function App() {
       setStorage('google');
       window.localStorage.setItem(STORAGE_CHOICE_KEY, 'google');
       setStatus('Google Drive er koblet til. Filer lagres i Google Drive/CV Kiwi.');
+      return true;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Kunne ikke koble til Google Drive.');
+      const message = error instanceof Error ? error.message : 'Kunne ikke koble til Google Drive.';
+      setStatus(message);
+      setGoogleDriveError(message);
+      return false;
+    } finally {
+      setGoogleDriveConnecting(false);
     }
   }
 
   async function startWithGoogleDrive() {
-    await connectGoogleDrive();
-    if (googleDrive.state.connected) setWelcomeOpen(false);
+    if (await connectGoogleDrive()) setWelcomeOpen(false);
   }
 
   async function startWithLocalFolder() {
@@ -941,11 +964,9 @@ export default function App() {
       ...current,
       sections: current.sections.filter(candidate => candidate.id !== section.id),
       selectedBlockIds: current.selectedBlockIds?.filter(selectionId => !belongsToSection(selectionId)),
-      customCategorySelectionIds: current.customCategorySelectionIds?.filter(selectionId => !belongsToSection(selectionId)),
       cvVersions: current.cvVersions?.map(version => ({
         ...version,
         selectedBlockIds: version.selectedBlockIds.filter(selectionId => !belongsToSection(selectionId)),
-        customCategorySelectionIds: version.customCategorySelectionIds.filter(selectionId => !belongsToSection(selectionId)),
         overrides: {
           ...version.overrides,
           sectionOrderIds: version.overrides.sectionOrderIds?.filter(sectionId => sectionId !== section.id),
@@ -1011,18 +1032,6 @@ export default function App() {
     });
   }
 
-  function toggleQualificationItem(blockId: string, itemSelectionId: string, siblingSelectionIds: string[]) {
-    setDocument(current => {
-      const selected = current.customCategorySelectionIds ?? [];
-      const next = selected.includes(blockId)
-        ? [...selected.filter(id => id !== blockId), ...siblingSelectionIds.filter(id => id !== itemSelectionId)]
-        : selected.includes(itemSelectionId)
-          ? selected.filter(id => id !== itemSelectionId)
-          : [...selected, itemSelectionId];
-      return { ...current, customCategorySelectionIds: Array.from(new Set(next)) };
-    });
-  }
-
   function toggleMasterBlock(blockId: string) {
     setExpandedMasterBlockIds(current => current.includes(blockId)
       ? current.filter(id => id !== blockId)
@@ -1041,7 +1050,7 @@ export default function App() {
     const nextDocument = applyCvVersionToDocument(document, version, versions);
     setActiveCvVersionId(version.id);
     setCvBlockIds([...version.selectedBlockIds]);
-    setFormatSettings({ ...DEFAULT_FORMAT_SETTINGS, ...version.formatSettings });
+    setFormatSettings(normalizeFormatSettings(version.formatSettings));
     setDocument(nextDocument);
     setCvVersionMenuOpen(false);
   }
@@ -1073,7 +1082,6 @@ export default function App() {
           selectedBlockIds: defaultCvSelections(document),
           formatSettings: { ...DEFAULT_FORMAT_SETTINGS },
           overrides: { text: {}, descriptionVariantIds: {}, hiddenFields: {} },
-          customCategorySelectionIds: [],
           qualificationDescription: '',
           qualificationDescriptionLines: undefined
         };
@@ -1196,7 +1204,6 @@ export default function App() {
   const masterBlocks = getMasterBlocks(document);
   const cvVersions = ensureCvVersions(document);
   const activeCvVersion = cvVersions.find(version => version.id === activeCvVersionId) ?? cvVersions[0];
-  const customCategorySelectionIds = document.customCategorySelectionIds ?? [];
   const activeCvOverrides: CvVersionOverrideState = document.cvVersionOverrides?.[ACTIVE_CV_VERSION_ID] ?? { text: {}, descriptionVariantIds: {}, hiddenFields: {} };
   const cvVersion = applyCvPreviewOrder(createCvVersion(document, cvBlockIds), activeCvOverrides);
   const selectedVersionBlocks = masterBlocks.flatMap(block => {
@@ -1246,18 +1253,12 @@ export default function App() {
     });
   }
 
-  function updateQualificationHighlightOrder(highlightIds: string[]) {
-    setDocument(current => ({ ...current, customCategorySelectionIds: highlightIds }));
-  }
-
   function updateCvDescriptionVariant(entryId: string, variantId: string, resetDescriptionOverride = false) {
     setDocument(current => {
       const existing = current.cvVersionOverrides?.[ACTIVE_CV_VERSION_ID] ?? { text: {}, descriptionVariantIds: {}, hiddenFields: {} };
       const text = { ...existing.text };
       if (resetDescriptionOverride) {
-        const descriptionKey = entryId.startsWith('qualification.')
-          ? `${entryId}.description`
-          : `entry.${entryId}.description`;
+        const descriptionKey = `entry.${entryId}.description`;
         delete text[descriptionKey];
       }
       return {
@@ -1290,56 +1291,6 @@ export default function App() {
       qualificationDescription: lines.map(line => line.runs.map(run => run.text).join('')).join('\n')
     }));
   }
-
-  function pulseQualificationAttention() {
-    if (qualificationAttentionTimerRef.current !== null) window.clearTimeout(qualificationAttentionTimerRef.current);
-    setQualificationAttention(false);
-    window.requestAnimationFrame(() => {
-      setQualificationAttention(true);
-      qualificationAttentionTimerRef.current = window.setTimeout(stopQualificationAttention, 850);
-    });
-  }
-
-  function stopQualificationAttention() {
-    if (qualificationAttentionTimerRef.current !== null) window.clearTimeout(qualificationAttentionTimerRef.current);
-    qualificationAttentionTimerRef.current = null;
-    setQualificationAttention(false);
-  }
-
-  function requestQualificationAttention() {
-    const hasOpenCategory = masterNavMode === 'cv' && masterBlocks.some(block => block.id !== 'profile' && block.items.length > 0 && expandedMasterBlockIds.includes(block.id));
-    if (hasOpenCategory) {
-      pulseQualificationAttention();
-      return;
-    }
-
-    const workBlock = masterBlocks.find(block => {
-      const section = document.sections.find(candidate => candidate.id === block.id);
-      return section?.kind === 'work' || block.id.toLowerCase().includes('arbeidserfaring') || block.title.toLowerCase().includes('arbeidserfaring');
-    });
-    if (!workBlock) {
-      pulseQualificationAttention();
-      return;
-    }
-
-    setQualificationAttention(false);
-    setPendingQualificationAttentionBlockId(workBlock.id);
-    setMasterNavMode('cv');
-    setExpandedMasterBlockIds(current => current.includes(workBlock.id) ? current : [...current, workBlock.id]);
-    window.requestAnimationFrame(() => window.document.querySelector<HTMLElement>(`[data-master-block-id="${CSS.escape(workBlock.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
-  }
-
-  function finishPendingQualificationAttention(blockId: string) {
-    if (pendingQualificationAttentionBlockId !== blockId) return;
-    setPendingQualificationAttentionBlockId(null);
-    pulseQualificationAttention();
-  }
-
-  useEffect(() => {
-    if (!pendingQualificationAttentionBlockId) return;
-    const fallback = window.setTimeout(() => finishPendingQualificationAttention(pendingQualificationAttentionBlockId), 600);
-    return () => window.clearTimeout(fallback);
-  }, [pendingQualificationAttentionBlockId]);
 
   function openFormatPanel() {
     setFormatPanelClosing(false);
@@ -1406,7 +1357,7 @@ export default function App() {
       </header>
 
       <div className={`app-layout cv-mode ${USE_DRAG_DROP_CV_BUILDER ? 'drag-drop-builder' : 'toggle-builder'} ${formatPanelOpen && !formatPanelClosing ? 'is-formatting' : ''}`}>
-        <nav className={`local-nav ${masterNavMode === 'master' ? 'is-dimmed' : ''} ${qualificationAttention ? 'is-qualification-attention' : ''} ${masterInfoClosing ? 'is-closing' : ''}`} aria-label="CV-seksjoner" onAnimationEnd={event => { if (event.animationName === 'qualification-key-attention') stopQualificationAttention(); }}>
+        <nav className={`local-nav ${masterNavMode === 'master' ? 'is-dimmed' : ''} ${masterInfoClosing ? 'is-closing' : ''}`} aria-label="CV-seksjoner">
           <div className="cv-version-manager" ref={cvVersionManagerRef}>
             {masterNavMode === 'cv'
               ? <button className="cv-version-trigger" type="button" aria-expanded={cvVersionMenuOpen} onClick={() => setCvVersionMenuOpen(open => !open)}>{activeCvVersion.name}<Icon icon={cvVersionMenuOpen ? 'mdi:chevron-up' : 'mdi:chevron-down'} aria-hidden="true" /></button>
@@ -1432,6 +1383,15 @@ export default function App() {
               {masterBlockScrollState.canScrollUp && <button className="master-block-scroll-arrow is-top" type="button" onClick={() => scrollMasterBlocks('up')} aria-label="Vis seksjonene over"><Icon icon="mdi:chevron-up" /></button>}
               <div className="master-block-scroll" ref={masterBlockScrollRef} onScroll={() => setMasterNavInfo(null)}>
                 <div className="master-block-list">
+                  {masterNavMode === 'cv' && <div className="master-nav-group is-qualifications">
+                    <div className="master-block" data-master-block-id="qualifications">
+                      <button className={`cv-include-toggle ${(document.qualificationVisible !== false) ? 'is-on' : ''}`} type="button" role="switch" aria-checked={document.qualificationVisible !== false} aria-label={`${document.qualificationVisible !== false ? 'Skjul' : 'Vis'} Nøkkelkvalifikasjoner i CV-en`} onClick={() => setDocument(current => ({ ...current, qualificationVisible: current.qualificationVisible === false }))}>
+                        <Icon icon={document.qualificationVisible !== false ? 'mdi:eye' : 'mdi:eye-off-outline'} aria-hidden="true" />
+                      </button>
+                      <span className="master-block-icon"><Icon icon="mdi:key" aria-hidden="true" /></span>
+                      <strong>Nøkkelkvalifikasjoner</strong>
+                    </div>
+                  </div>}
                   {masterBlocks.map(block => {
                     const isExpanded = expandedMasterBlockIds.includes(block.id);
                     const itemSelectionIds = block.items.map(item => item.selectionId);
@@ -1447,14 +1407,12 @@ export default function App() {
                         <span className={`master-block-icon ${block.id.includes('frivillig') ? 'is-volunteering' : ''}`}><Icon icon={block.icon} aria-hidden="true" /></span><strong>{block.title}</strong>{block.items.length > 0 && !isCvDisabledBlock && <button className={`master-block-expand mode-fade-control ${masterNavMode === 'master' ? 'is-mode-hidden' : ''}`} type="button" aria-label={`${isExpanded ? 'Skjul' : 'Vis'} elementer i ${block.title}`} aria-expanded={isExpanded} aria-hidden={masterNavMode === 'master'} tabIndex={masterNavMode === 'master' ? -1 : 0} onClick={event => { event.stopPropagation(); if (!masterInfoOpen) toggleMasterBlock(block.id); }}><Icon icon={isExpanded ? 'mdi:chevron-up' : 'mdi:chevron-down'} /></button>}
                         {!masterInfoOpen && USE_DRAG_DROP_CV_BUILDER && <small>⋮⋮</small>}
                       </div>
-                      {block.items.length > 0 && <div className={`master-block-children-shell ${childrenOpen ? 'is-open' : ''}`} aria-hidden={!childrenOpen} onTransitionEnd={event => { if (event.target === event.currentTarget && event.propertyName === 'grid-template-rows' && childrenOpen) finishPendingQualificationAttention(block.id); }}>
+                      {block.items.length > 0 && <div className={`master-block-children-shell ${childrenOpen ? 'is-open' : ''}`} aria-hidden={!childrenOpen}>
                         <div className="master-block-children">
                           {block.items.map(item => {
-                            const qualificationSelected = customCategorySelectionIds.includes(block.id) || customCategorySelectionIds.includes(item.selectionId);
-                            return <div className={`master-block-child ${qualificationSelected ? 'has-qualification-key' : ''}`} draggable={childrenOpen && USE_DRAG_DROP_CV_BUILDER} onDragStart={event => { if (!childrenOpen || !USE_DRAG_DROP_CV_BUILDER) return; setDraggingBlockId(item.selectionId); event.dataTransfer.setData('text/plain', item.selectionId); event.dataTransfer.effectAllowed = 'copy'; }} onDragEnd={() => setDraggingBlockId(null)} key={item.selectionId} title={item.subtitle || item.title}>
+                            return <div className="master-block-child" draggable={childrenOpen && USE_DRAG_DROP_CV_BUILDER} onDragStart={event => { if (!childrenOpen || !USE_DRAG_DROP_CV_BUILDER) return; setDraggingBlockId(item.selectionId); event.dataTransfer.setData('text/plain', item.selectionId); event.dataTransfer.effectAllowed = 'copy'; }} onDragEnd={() => setDraggingBlockId(null)} key={item.selectionId} title={item.subtitle || item.title}>
                               {!USE_DRAG_DROP_CV_BUILDER && <button className={`cv-include-toggle ${cvBlockIds.includes(block.id) || cvBlockIds.includes(item.selectionId) ? 'is-on' : ''}`} type="button" role="switch" aria-checked={cvBlockIds.includes(block.id) || cvBlockIds.includes(item.selectionId)} tabIndex={childrenOpen ? 0 : -1} aria-label={`${cvBlockIds.includes(block.id) || cvBlockIds.includes(item.selectionId) ? 'Skjul' : 'Vis'} ${item.title} i CV-en`} onClick={() => toggleVersionItem(block.id, item.selectionId, itemSelectionIds)}><Icon icon={cvBlockIds.includes(block.id) || cvBlockIds.includes(item.selectionId) ? 'mdi:eye' : 'mdi:eye-off-outline'} aria-hidden="true" /></button>}
                               {USE_DRAG_DROP_CV_BUILDER && <span className="master-block-child-handle">⋮⋮</span>}<span>{item.title}</span>
-                              {block.id !== 'profile' && <button className={`qualification-key-toggle ${qualificationSelected ? 'is-selected' : ''}`} type="button" aria-pressed={qualificationSelected} tabIndex={childrenOpen ? 0 : -1} title={qualificationSelected ? 'Fjern fra Nøkkelkvalifikasjoner' : 'Legg til i Nøkkelkvalifikasjoner'} aria-label={`${qualificationSelected ? 'Fjern' : 'Legg til'} ${item.title} ${qualificationSelected ? 'fra' : 'i'} Nøkkelkvalifikasjoner`} onClick={event => { event.stopPropagation(); toggleQualificationItem(block.id, item.selectionId, itemSelectionIds); }}><Icon icon={qualificationSelected ? 'mdi:key' : 'mdi:key-outline'} aria-hidden="true" /></button>}
                             </div>;
                           })}
                         </div>
@@ -1593,10 +1551,8 @@ export default function App() {
           onDescriptionVariantChange={updateCvDescriptionVariant}
           onFieldVisibilityChange={updateCvPreviewFieldVisibility}
           onQualificationDescriptionChange={updateQualificationDescription}
-          onQualificationAttention={requestQualificationAttention}
           onSectionOrderChange={updateCvPreviewSectionOrder}
           onEntryOrderChange={updateCvPreviewEntryOrder}
-          onQualificationHighlightOrderChange={updateQualificationHighlightOrder}
           sortingEnabled={masterNavMode === 'cv'}
         />
       </div>
@@ -1617,6 +1573,7 @@ export default function App() {
               <h3>Tekst</h3>
               <FormatControl label="Linjeavstand" value={formatSettings.lineHeight} min={1} max={2.2} step={0.05} onChange={lineHeight => setFormatSettings(current => ({ ...current, lineHeight }))} />
               <FormatControl label="Navn" value={formatSettings.nameSize} min={14} max={36} step={1} onChange={nameSize => setFormatSettings(current => ({ ...current, nameSize }))} />
+              <FormatControl label="Tittel under navn" value={formatSettings.profileTitleSize} min={8} max={24} step={1} onChange={profileTitleSize => setFormatSettings(current => ({ ...current, profileTitleSize }))} />
               <FormatControl label="Seksjonstittel" value={formatSettings.sectionTitleSize} min={9} max={22} step={1} onChange={sectionTitleSize => setFormatSettings(current => ({ ...current, sectionTitleSize }))} />
               <FormatControl label="Deltittel" value={formatSettings.subtitleSize} min={8} max={18} step={1} onChange={subtitleSize => setFormatSettings(current => ({ ...current, subtitleSize }))} />
               <FormatControl label="Paragraf" value={formatSettings.paragraphSize} min={8} max={16} step={1} onChange={paragraphSize => setFormatSettings(current => ({ ...current, paragraphSize }))} />
@@ -1626,12 +1583,16 @@ export default function App() {
             </section>
             <section className="format-settings-group">
               <h3>Layout</h3>
+              <FormatControl label="Venstre kolonnebredde (%)" value={formatSettings.entryColumnWidth} min={15} max={50} step={1} onChange={entryColumnWidth => setFormatSettings(current => ({ ...current, entryColumnWidth }))} />
+              <FormatControl label="Avstand mellom kolonner (px)" value={formatSettings.entryColumnGap} min={0} max={48} step={1} onChange={entryColumnGap => setFormatSettings(current => ({ ...current, entryColumnGap }))} />
               <FormatControl label="Avstand mellom erfaringer" value={formatSettings.experienceGap} min={0} max={40} step={1} onChange={experienceGap => setFormatSettings(current => ({ ...current, experienceGap }))} />
               <FormatControl label="Erfarings-element gap" value={formatSettings.experienceElementGap} min={0} max={24} step={1} onChange={experienceElementGap => setFormatSettings(current => ({ ...current, experienceElementGap }))} />
               <FormatControl label="Bildestørrelse" value={formatSettings.photoSize} min={32} max={90} step={1} onChange={photoSize => setFormatSettings(current => ({ ...current, photoSize }))} />
+              <FormatControl label="Avstand mellom bilde og tekst" value={formatSettings.photoTextGap} min={0} max={80} step={1} onChange={photoTextGap => setFormatSettings(current => ({ ...current, photoTextGap }))} />
+              <FormatControl label="Avstand mellom navn og tittel" value={formatSettings.nameTitleGap} min={0} max={48} step={1} onChange={nameTitleGap => setFormatSettings(current => ({ ...current, nameTitleGap }))} />
               <FormatControl label="Sidemarger" value={formatSettings.pageMargins} min={10} max={48} step={1} onChange={pageMargins => setFormatSettings(current => ({ ...current, pageMargins }))} />
               <FormatControl label="Topp-/bunnmarg" value={formatSettings.verticalPageMargins} min={0} max={48} step={1} onChange={verticalPageMargins => setFormatSettings(current => ({ ...current, verticalPageMargins }))} />
-              <FormatToggleControl label="Organisasjon, dato og type på én linje – Nøkkelkvalifikasjoner" value={formatSettings.inlineQualificationMetadata} variant="switch" onChange={inlineQualificationMetadata => setFormatSettings(current => ({ ...current, inlineQualificationMetadata }))} />
+              <FormatControl label="Personalia – luft over og under" value={formatSettings.personalVerticalPadding} min={0} max={48} step={1} onChange={personalVerticalPadding => setFormatSettings(current => ({ ...current, personalVerticalPadding }))} />
               <FormatToggleControl label="Organisasjon, dato og type på én linje – øvrige erfaringer" value={formatSettings.inlineExperienceMetadata} variant="switch" onChange={inlineExperienceMetadata => setFormatSettings(current => ({ ...current, inlineExperienceMetadata }))} />
             </section>
             <section className="format-settings-group">
@@ -1759,15 +1720,16 @@ export default function App() {
           <h1 id="welcome-title">Velg hvor prosjektet skal lagres</h1>
           <p>Velg hvor prosjektet skal lagres. Et tidligere lokalt prosjekt åpnes automatisk når nettleseren fortsatt har tilgang.</p>
           <div className="welcome-storage-options">
-            <button className="welcome-storage-option" onClick={() => void startWithGoogleDrive()}>
+            <button className="welcome-storage-option" disabled={googleDriveConnecting} aria-busy={googleDriveConnecting} onClick={() => void startWithGoogleDrive()}>
               <span className="welcome-option-icon is-google-drive" aria-hidden="true"><img src={googleDriveIcon} alt="" /></span>
               <strong>Administrer lagring i Google Drive</strong>
-              <small>Koble til din egen Drive-mappe.</small>
+              <small>{googleDriveConnecting ? 'Kobler til Google Drive…' : 'Koble til din egen Drive-mappe.'}</small>
             </button>
             <button className="welcome-storage-option" onClick={() => void startWithPcStorage()}>
               <span className="welcome-option-icon" aria-hidden="true"><Icon icon="mdi:monitor" /></span>
-              <strong>Administrer lagring på PC</strong>
+              <strong>Administrer lagring lokalt</strong>
               <small>Lagre lokalt eller last opp et tidligere prosjekt.</small>
+              <small>Autolagring til en valgt lokal mappe støttes kun i Chrome og Edge på Windows og Mac. Safari og Firefox krever manuell nedlasting.</small>
             </button>
             <button className="welcome-storage-option" onClick={startWithFilledExample}>
               <span className="welcome-option-icon" aria-hidden="true"><Icon icon="mdi:file-document-outline" /></span>
@@ -1775,6 +1737,8 @@ export default function App() {
               <small>Utforsk en anonym CV med enkle eksempler i hver kategori.</small>
             </button>
           </div>
+          {googleDriveConnecting && <p role="status">Åpner Google-innlogging. Fullfør innloggingen i Google-vinduet.</p>}
+          {googleDriveError && <p role="alert">{googleDriveError}</p>}
         </section>
       </div>
     )}
@@ -1907,8 +1871,7 @@ function FormatControl({ label, value, min, max, step, suffix = '', onChange }: 
   }, [min, max, step, decimals]);
 
   return (
-    <label className="preview-format-control">
-      <span>{label}</span>
+    <label className="preview-format-control" data-format-label={label}>
       <input type="range" min={min} max={max} step={step} value={value} onChange={event => onChange(Number(event.currentTarget.value))} />
       <span className={`preview-format-number ${pointerActive ? 'is-pointer-active' : ''}`}>
         <input
@@ -1932,12 +1895,13 @@ function FormatControl({ label, value, min, max, step, suffix = '', onChange }: 
         />
         {suffix && <small>{suffix}</small>}
       </span>
+      <span>{label}</span>
     </label>
   );
 }
 
 function FormatColorControl({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="preview-format-color">
+  return <label className="preview-format-color" data-format-label={label}>
     <span>{label}</span>
     <span className="preview-format-color-value">
       <input type="color" value={value} onChange={event => onChange(event.currentTarget.value)} aria-label={label} />
@@ -1952,7 +1916,7 @@ function FormatToggleControl({ label, value, variant = 'visibility', onChange }:
   const icon = variant === 'switch'
     ? value ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline'
     : value ? 'mdi:eye' : 'mdi:eye-off-outline';
-  return <div className="preview-format-toggle-row">
+  return <div className="preview-format-toggle-row" data-format-label={label}>
     <span>{label}</span>
     <button className={`preview-format-toggle ${value ? 'is-on' : ''}`} type="button" role="switch" aria-checked={value} onClick={() => { window.dispatchEvent(new Event('cv-kiwi:format-change-start')); onChange(!value); }}>
       <Icon icon={icon} aria-hidden="true" />

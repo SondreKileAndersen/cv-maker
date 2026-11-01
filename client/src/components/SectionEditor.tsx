@@ -2,6 +2,7 @@ import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 're
 import { Icon } from '@iconify/react';
 import { CvSection, CvEntry, DescriptionVariant, RichLine } from '../types';
 import { getSectionIcon, sortCvEntriesByDate } from '../cvVersion';
+import { pasteText } from './pasteText';
 
 interface Props {
   section: CvSection;
@@ -631,7 +632,7 @@ export function DescriptionVersionsEditor({ entry, onChange, single = false, pla
       <button className="description-version-copy" type="button" onClick={duplicateVariant} aria-label="Kopier aktiv beskrivelsesversjon"><Icon icon="mdi:content-copy" aria-hidden="true" /></button>
       <button className="description-version-add" type="button" onClick={addVariant} aria-label="Legg til beskrivelsesversjon">+</button>
     </div>}
-    <div ref={editorRef} className={`description-version-textarea description-rich-editor ${single ? 'is-single' : ''}`} contentEditable suppressContentEditableWarning spellCheck data-placeholder={placeholder} onMouseUp={refreshFormatState} onKeyUp={refreshFormatState} onBlur={commitEditor} onKeyDown={event => {
+    <div ref={editorRef} className={`description-version-textarea description-rich-editor ${single ? 'is-single' : ''}`} contentEditable suppressContentEditableWarning spellCheck onPaste={event => { pasteText(event); refreshFormatState(); }} data-placeholder={placeholder} onMouseUp={refreshFormatState} onKeyUp={refreshFormatState} onBlur={commitEditor} onKeyDown={event => {
       if (!event.ctrlKey) return;
       const key = event.key.toLowerCase();
       if (!['b', 'i', 'u', 'k', '\\'].includes(key)) return;
@@ -808,7 +809,7 @@ function DateRow({ label, value, onChange, children }: { label: string; value: s
     <div className="date-field">
       <span>{label}</span>
       <DateDropdown value={year} placeholder="Årstall..." options={years.map(option => ({ value: option, label: option }))} onChange={nextYear => onChange(makeDate(nextYear, month))} />
-      <DateDropdown value={month} placeholder="Måned..." options={months.map((option, index) => ({ value: String(index + 1).padStart(2, '0'), label: option }))} onChange={nextMonth => onChange(makeDate(year, nextMonth))} />
+      <DateDropdown value={month} placeholder="-" options={[{ value: '', label: '-' }, ...months.map((option, index) => ({ value: String(index + 1).padStart(2, '0'), label: option }))]} onChange={nextMonth => onChange(makeDate(year, nextMonth))} />
       <span className="date-row-actions">{children}</span>
     </div>
   );
@@ -859,6 +860,7 @@ function legacyOrganization(subtitle: string) {
 
 function summaryPeriod(entry: CvEntry) {
   if (!entry.startDate && !entry.endDate && !entry.isCurrent) return '';
+  if (!entry.isCurrent && entry.startDate && entry.endDate && entry.startDate.split('-')[0] === entry.endDate.split('-')[0]) return entry.startDate.split('-')[0];
   const start = formatDate(entry.startDate);
   const end = entry.isCurrent ? 'nå' : formatDate(entry.endDate);
   return [start, end].filter(Boolean).join('–');

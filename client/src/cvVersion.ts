@@ -1,4 +1,4 @@
-import { CvDocument, CvEntry, CvSection, Profile, QualificationHighlight } from './types';
+import { CvDocument, CvEntry, CvSection, Profile } from './types';
 
 export type MasterBlockItem = {
   /** Stable ID used when this individual item is added to a CV version. */
@@ -18,11 +18,11 @@ const itemSelectionId = (blockId: string, itemId: string) => `item:${blockId}:${
 
 const profileFields = [
   ['fullName', 'Navn'],
+  ['title', 'Tittel'],
   ['birthDate', 'Fødselsdato'],
   ['address', 'Adresse'],
   ['phone', 'Telefon'],
   ['email', 'E-post'],
-  ['title', 'Tittel'],
   ['organization', 'Organisasjon'],
   ['socialLabel', 'SoMe']
 ] as const;
@@ -32,7 +32,7 @@ const profileDetailItemId = (detailId: string) => `detail-${detailId}`;
 function profileItems(profile: Profile): MasterBlockItem[] {
   const stored = profile.personalDetails ?? [];
   const representedSourceKeys = new Set(profileFields.map(([key]) => key));
-  const coreItems = profileFields.map(([key, fallbackTitle]) => {
+  const coreItems = profileFields.filter(([key]) => key !== 'socialLabel' || profile.personalDetails === undefined || stored.some(detail => detail.sourceKey === key)).map(([key, fallbackTitle]) => {
     const detail = stored.find(item => item.sourceKey === key);
     return {
       selectionId: itemSelectionId('profile', key),
@@ -134,8 +134,14 @@ export function createCvVersion(master: CvDocument, selectedBlockIds: string[]):
   const hasItem = (blockId: string, itemId: string | number) =>
     selectedBlockIds.includes(itemSelectionId(blockId, String(itemId)));
 
-  const selectedProfile = hasWholeBlock('profile') ? master.profile : createSelectedProfile(master.profile, hasItem);
-  const qualificationsVisible = true;
+  const selectedProfile = hasWholeBlock('profile') ? { ...master.profile } : createSelectedProfile(master.profile, hasItem);
+  // Once Master has an explicit field list, removed optional fields must not
+  // reappear through legacy values retained on the profile.
+  if (master.profile.personalDetails !== undefined && !master.profile.personalDetails.some(detail => detail.sourceKey === 'socialLabel')) {
+    selectedProfile.socialLabel = '';
+    selectedProfile.socialUrl = '';
+  }
+  const qualificationsVisible = master.qualificationVisible !== false;
   const referencesVisible = hasWholeBlock('references') || master.references.some((_, index) => hasItem('references', index));
 
   return {
@@ -150,61 +156,10 @@ export function createCvVersion(master: CvDocument, selectedBlockIds: string[]):
     qualificationEnabled: qualificationsVisible,
     qualificationDescription: qualificationsVisible ? master.qualificationDescription ?? '' : '',
     qualificationDescriptionLines: qualificationsVisible ? master.qualificationDescriptionLines : undefined,
-    qualificationHighlights: qualificationsVisible ? resolveQualificationHighlights(master) : [],
     referencesEnabled: referencesVisible,
     // Reference people remain Masterdata. A CV only shows the fixed on-request message.
     references: []
   };
-}
-
-function resolveQualificationHighlights(master: CvDocument): QualificationHighlight[] {
-  const selectedIds = master.customCategorySelectionIds ?? [];
-  const blocks = getMasterBlocks(master);
-  const resolved: QualificationHighlight[] = [];
-
-  for (const selectionId of selectedIds) {
-    const category = blocks.find(block => block.id === selectionId);
-    if (category) {
-      if (category.id === 'references') continue;
-      for (const item of category.items) resolved.push(toQualificationHighlight(master, category, item));
-      continue;
-    }
-    const block = blocks.find(candidate => candidate.items.some(item => item.selectionId === selectionId));
-    const item = block?.items.find(candidate => candidate.selectionId === selectionId);
-    if (block && block.id !== 'references' && item) resolved.push(toQualificationHighlight(master, block, item));
-  }
-
-  return Array.from(new Map(resolved.map(item => [item.id, item])).values());
-}
-
-function toQualificationHighlight(master: CvDocument, block: MasterBlock, item: MasterBlockItem): QualificationHighlight {
-  const section = master.sections.find(candidate => candidate.id === block.id);
-  const entry = section?.entries.find((candidate, index) => entryItem(block.id, candidate, index).selectionId === item.selectionId);
-  const referenceIndex = block.id === 'references' ? block.items.findIndex(candidate => candidate.selectionId === item.selectionId) : -1;
-  const reference = referenceIndex >= 0 ? master.references[referenceIndex] : undefined;
-  const description = entry
-    ? entryDescription(entry)
-    : reference
-      ? [reference.organization, reference.phone, reference.email].filter(Boolean).join(' · ')
-      : item.subtitle;
-  const activeVariant = entry?.descriptionVariants?.find(variant => variant.id === entry.activeDescriptionVariantId);
-  const descriptionLines = entry ? (activeVariant?.lines ?? entry.lines) : undefined;
-
-  return {
-    id: item.selectionId,
-    title: item.title,
-    subtitle: entry?.subtitle || entry?.organization || undefined,
-    description: description || undefined,
-    descriptionLines: descriptionLines?.map(line => ({ runs: line.runs.map(run => ({ ...run })) })),
-    icon: block.icon,
-    entry
-  };
-}
-
-function entryDescription(entry: CvEntry) {
-  const activeVariant = entry.descriptionVariants?.find(variant => variant.id === entry.activeDescriptionVariantId);
-  const lines = activeVariant?.lines ?? entry.lines;
-  return lines.map(line => line.runs.map(run => run.text).join('')).join('\n');
 }
 
 function createSelectedProfile(profile: Profile, hasItem: (blockId: string, itemId: string | number) => boolean): Profile {

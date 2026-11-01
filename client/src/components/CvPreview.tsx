@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Icon } from '@iconify/react';
 import { createPortal } from 'react-dom';
-import { CvDocument, CvEntry, CvFormatSettingsData, CvSection, CvVersionOverrideState, DescriptionVariant, QualificationHighlight, RichLine } from '../types';
+import { CvDocument, CvEntry, CvFormatSettingsData, CvSection, CvVersionOverrideState, DescriptionVariant, RichLine } from '../types';
 import { DescriptionVersionsEditor } from './SectionEditor';
 import { getSectionIcon } from '../cvVersion';
+import { pasteText } from './pasteText';
 
 const DOCUMENT_FONT_SCALE = 0.72;
 const REFERENCE_SECTION_ID = '__cv-references';
@@ -32,16 +33,14 @@ interface Props {
   onDescriptionVariantChange: (entryId: string, variantId: string, resetDescriptionOverride?: boolean) => void;
   onFieldVisibilityChange: (key: string, hidden: boolean) => void;
   onQualificationDescriptionChange: (lines: RichLine[]) => void;
-  onQualificationAttention: () => void;
   onSectionOrderChange: (sectionIds: string[]) => void;
   onEntryOrderChange: (sectionId: string, entryIds: string[]) => void;
-  onQualificationHighlightOrderChange: (highlightIds: string[]) => void;
   sortingEnabled: boolean;
 }
 
 export interface CvFormatSettings extends CvFormatSettingsData {}
 
-export function CvPreview({ document, overrides, formatSettings, formatPanelOpen, onToggleFormatPanel, onTextChange, onDescriptionVariantChange, onFieldVisibilityChange, onQualificationDescriptionChange, onQualificationAttention, onSectionOrderChange, onEntryOrderChange, onQualificationHighlightOrderChange, sortingEnabled }: Props) {
+export function CvPreview({ document, overrides, formatSettings, formatPanelOpen, onToggleFormatPanel, onTextChange, onDescriptionVariantChange, onFieldVisibilityChange, onQualificationDescriptionChange, onSectionOrderChange, onEntryOrderChange, sortingEnabled }: Props) {
   const [zoom, setZoom] = useState(1.8);
   const [zoomText, setZoomText] = useState('180');
   const [editingQualifications, setEditingQualifications] = useState(false);
@@ -62,8 +61,6 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
   const entryReorderTokenRef = useRef(0);
   const lastPointerPositionRef = useRef({ x: -1, y: -1 });
   const skipNextSectionPageResetRef = useRef(false);
-  const qualificationTabRef = useRef<HTMLDivElement>(null);
-  const [qualificationGuidePosition, setQualificationGuidePosition] = useState<{ top: number; right: number } | null>(null);
   const [zoomControlLeft, setZoomControlLeft] = useState<number | null>(null);
   const hasReferences = Boolean(document.referencesEnabled);
   const contentSections = document.sections.filter(section => section.entries.length > 0);
@@ -76,18 +73,10 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
     : contentSections;
   const sectionSignature = JSON.stringify({ sections, text: overrides.text, descriptionVariants: overrides.descriptionVariantIds, hiddenFields: overrides.hiddenFields });
   const [sectionPages, setSectionPages] = useState<SectionPage[]>(() => createSectionPages(sections));
-  const qualificationHighlights = document.qualificationHighlights ?? [];
   const qualificationPaginationSignature = JSON.stringify({
+    enabled: Boolean(document.qualificationEnabled),
     description: document.qualificationDescription,
     descriptionLines: document.qualificationDescriptionLines,
-    highlights: qualificationHighlights.map(highlight => ({
-      id: highlight.id,
-      title: highlight.title,
-      subtitle: highlight.subtitle,
-      description: highlight.description,
-      descriptionLines: highlight.descriptionLines,
-      entryId: highlight.entry?.id
-    }))
   });
   const hasQualifications = Boolean(document.qualificationEnabled);
   const hasProfile = [
@@ -103,7 +92,6 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
   ].some(Boolean);
   const text = (key: string, fallback: string) => overrides.text[key] ?? fallback;
   const profileTitle = text('profile.title', document.profile.title);
-  const profileOrganization = text('profile.organization', document.profile.organization);
   const profileContactRows = getProfileContactRows(document.profile);
   const setPreviewZoom = (value: number) => setZoom(Math.min(3, Math.max(.55, Number(value.toFixed(2)))));
 
@@ -134,12 +122,17 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
   }
 
   function measureWithoutInlineLayoutTransforms<T>(host: HTMLElement, measure: () => T) {
+    // Web Animations transforms also affect bounding boxes. Temporarily detach
+    // their effects so pagination measures the final layout, then resume intact.
+    const animated = entryReorderAnimationsRef.current.map(animation => ({ animation, effect: animation.effect }));
+    for (const { animation } of animated) animation.effect = null;
     const transformed = Array.from(host.querySelectorAll<HTMLElement>('[data-preview-entry-anchor], [data-preview-layout-anchor]'))
       .map(element => ({ element, transform: element.style.transform }));
     for (const { element } of transformed) element.style.removeProperty('transform');
     try {
       return measure();
     } finally {
+      for (const { animation, effect } of animated) animation.effect = effect;
       for (const { element, transform } of transformed) {
         if (transform) element.style.transform = transform;
         else element.style.removeProperty('transform');
@@ -265,10 +258,6 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
     setEditingQualifications(false);
   }
 
-  function drawAttentionToMasterExperiences() {
-    onQualificationAttention();
-  }
-
   function moveSection(sectionId: string, direction: -1 | 1) {
     const ids = sections.filter(section => section.id !== REFERENCE_SECTION_ID).map(section => section.id);
     const index = ids.indexOf(sectionId);
@@ -303,16 +292,6 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
       });
       onEntryOrderChange(sectionId, ids);
     });
-  }
-
-  function moveQualificationHighlight(highlightId: string, direction: -1 | 1) {
-    const ids = qualificationHighlights.map(highlight => highlight.id);
-    const index = ids.indexOf(highlightId);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return;
-    [ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]];
-    const primaryAnchorId = `qualification:${highlightId}`;
-    queuePreviewLayoutReorder(`entry:${primaryAnchorId}`, () => onQualificationHighlightOrderChange(ids));
   }
 
   function findBackwardPullIndex(pageElements: HTMLElement[]) {
@@ -412,7 +391,7 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
     const resetPages = createSectionPages(sections);
     pendingPaginationResetRef.current = resetPages;
     setSectionPages(resetPages);
-  }, [sectionSignature, qualificationPaginationSignature, formatSettings.lineHeight, formatSettings.nameSize, formatSettings.photoSize, formatSettings.sectionTitleSize, formatSettings.subtitleSize, formatSettings.paragraphSize, formatSettings.experienceGap, formatSettings.experienceElementGap, formatSettings.titleUnderlineGap, formatSettings.sectionTitleBeforeGap, formatSettings.sectionTitleAfterGap, formatSettings.qualificationTitleDescriptionGap, formatSettings.pageMargins, formatSettings.verticalPageMargins, formatSettings.showTitleIcons, formatSettings.showPersonalIcons, formatSettings.inlineQualificationMetadata, formatSettings.inlineExperienceMetadata]);
+  }, [sectionSignature, qualificationPaginationSignature, formatSettings.lineHeight, formatSettings.nameSize, formatSettings.profileTitleSize, formatSettings.nameTitleGap, formatSettings.personalVerticalPadding, formatSettings.photoTextGap, formatSettings.photoSize, formatSettings.sectionTitleSize, formatSettings.subtitleSize, formatSettings.paragraphSize, formatSettings.experienceGap, formatSettings.experienceElementGap, formatSettings.entryColumnWidth, formatSettings.entryColumnGap, formatSettings.titleUnderlineGap, formatSettings.sectionTitleBeforeGap, formatSettings.sectionTitleAfterGap, formatSettings.qualificationTitleDescriptionGap, formatSettings.pageMargins, formatSettings.verticalPageMargins, formatSettings.showTitleIcons, formatSettings.showPersonalIcons, formatSettings.inlineExperienceMetadata]);
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
@@ -606,30 +585,6 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
   });
 
   useLayoutEffect(() => {
-    if (!hasQualifications) {
-      setQualificationGuidePosition(null);
-      return;
-    }
-    const updatePosition = () => {
-      const bounds = qualificationTabRef.current?.getBoundingClientRect();
-      if (!bounds) return;
-      setQualificationGuidePosition({ top: bounds.top + bounds.height / 2, right: window.innerWidth - bounds.left + 10 });
-    };
-    const frame = window.requestAnimationFrame(updatePosition);
-    const observer = new ResizeObserver(updatePosition);
-    if (qualificationTabRef.current) observer.observe(qualificationTabRef.current);
-    if (shellRef.current) observer.observe(shellRef.current);
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [hasQualifications, zoom, formatPanelOpen, formatSettings.photoSize, formatSettings.sectionTitleBeforeGap, formatSettings.verticalPageMargins]);
-
-  useLayoutEffect(() => {
     // Expansion while editing may temporarily block a page boundary to avoid
     // pagination oscillation. A new edit state is a new layout generation, so
     // those temporary blocks must not survive after the editor closes.
@@ -725,8 +680,11 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
         ];
       });
     };
-    updateOverflowingPage();
-  }, [sectionPages, editingQualifications, editingEntryAnchorId, document.qualificationDescription, document.qualificationDescriptionLines, qualificationHighlights, overrides.text, overrides.descriptionVariantIds, overrides.hiddenFields]);
+    // Long CVs can require more than React's nested-update limit in one pass.
+    // Yield between page moves, retaining the existing stable-position animation.
+    const frame = window.requestAnimationFrame(updateOverflowingPage);
+    return () => window.cancelAnimationFrame(frame);
+  }, [sectionPages, editingQualifications, editingEntryAnchorId, document.qualificationDescription, document.qualificationDescriptionLines, overrides.text, overrides.descriptionVariantIds, overrides.hiddenFields]);
 
   useLayoutEffect(() => {
     const host = shellRef.current;
@@ -761,8 +719,9 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
         return compacted;
       });
     };
-    compactPages();
-  }, [sectionPages, zoom, editingEntryAnchorId, formatSettings.experienceGap, document.qualificationDescription, document.qualificationDescriptionLines, qualificationHighlights, overrides.text, overrides.descriptionVariantIds, overrides.hiddenFields]);
+    const frame = window.requestAnimationFrame(compactPages);
+    return () => window.cancelAnimationFrame(frame);
+  }, [sectionPages, zoom, editingEntryAnchorId, formatSettings.experienceGap, document.qualificationDescription, document.qualificationDescriptionLines, overrides.text, overrides.descriptionVariantIds, overrides.hiddenFields]);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -809,10 +768,16 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
     '--preview-ui-inverse-zoom': 1 / zoom,
     '--cv-format-line-height': formatSettings.lineHeight,
     '--cv-format-name-size': `${formatSettings.nameSize * DOCUMENT_FONT_SCALE}px`,
+    '--cv-format-profile-title-size': `${formatSettings.profileTitleSize * DOCUMENT_FONT_SCALE}px`,
+    '--cv-format-name-title-gap': `${formatSettings.nameTitleGap}px`,
+    '--cv-format-personal-padding-y': `${formatSettings.personalVerticalPadding}px`,
+    '--cv-format-photo-text-gap': `${formatSettings.photoTextGap}px`,
     '--cv-format-section-title-size': `${formatSettings.sectionTitleSize * DOCUMENT_FONT_SCALE}px`,
     '--cv-format-subtitle-size': `${formatSettings.subtitleSize * DOCUMENT_FONT_SCALE}px`,
     '--cv-format-paragraph-size': `${formatSettings.paragraphSize * DOCUMENT_FONT_SCALE}px`,
     '--cv-format-experience-gap': `${formatSettings.experienceGap}px`,
+    '--cv-entry-column-width': `${formatSettings.entryColumnWidth}%`,
+    '--cv-entry-column-gap': `${formatSettings.entryColumnGap}px`,
     '--cv-format-experience-element-gap': `${formatSettings.experienceElementGap}px`,
     '--cv-format-title-underline-gap': '1px',
     '--cv-format-accent-color': formatSettings.accentColor,
@@ -862,10 +827,10 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
           {hasProfile && (
             <header className="cv-header">
               <div className="cv-photo">{document.profile.photoDataUrl ? <img src={document.profile.photoDataUrl} alt="" style={photoImageStyle(document.profile)} /> : null}</div>
-              <div className={`cv-name ${!profileTitle.trim() && !profileOrganization.trim() ? 'is-name-only' : ''}`}>
+              <div className="cv-header-text">
+              <div className={`cv-name ${!profileTitle.trim() ? 'is-name-only' : ''}`}>
                 <EditableText value={text('profile.fullName', document.profile.fullName)} onChange={value => onTextChange('profile.fullName', value)} className="preview-name" />
                 {profileTitle.trim() && <EditableText value={profileTitle} onChange={value => onTextChange('profile.title', value)} />}
-                {profileOrganization.trim() && <EditableText value={profileOrganization} onChange={value => onTextChange('profile.organization', value)} />}
               </div>
               <div className={`cv-contact ${formatSettings.showPersonalIcons ? '' : 'hide-icons'}`}>
                 {profileContactRows.map(row => (
@@ -877,11 +842,12 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
                   </div>
                 ))}
               </div>
+              </div>
             </header>
           )}
           {hasQualifications && (
             <>
-              <Tab title="Nøkkelkvalifikasjoner" icon="mdi:key" showIcon={formatSettings.showTitleIcons} tabRef={qualificationTabRef} />
+              <Tab title="Nøkkelkvalifikasjoner" icon="mdi:key" showIcon={formatSettings.showTitleIcons} />
               <main className={`cv-content qualification-preview-content ${editingQualifications ? 'is-editing' : ''}`}>
                 {editingQualifications ? (
                   <div className="qualification-inline-editor">
@@ -896,7 +862,6 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
                     {qualificationDescriptionLines(document).length > 0 && <div className="qualification-preview-description"><RichTextLines lines={qualificationDescriptionLines(document)} /></div>}
                   </div>
                 )}
-                <QualificationHighlightEntries highlights={qualificationHighlights} inlineMetadata={formatSettings.inlineQualificationMetadata} overrides={overrides} onTextChange={onTextChange} onDescriptionVariantChange={onDescriptionVariantChange} onFieldVisibilityChange={changeFieldVisibilityWithoutMovingViewport} onMove={moveQualificationHighlight} sortingEnabled={sortingEnabled} editingEntryAnchorId={editingEntryAnchorId} onEditingEntryChange={setEditingEntryAnchorId} />
               </main>
             </>
           )}
@@ -910,11 +875,6 @@ export function CvPreview({ document, overrides, formatSettings, formatPanelOpen
         ))}
 
       </div>
-      {hasQualifications && qualificationGuidePosition && createPortal(
-        <button className="qualification-key-guide" type="button" style={qualificationGuidePosition} onClick={drawAttentionToMasterExperiences}>Hovre over erfaring, og trykk på nøkkelsymbolet for å legge til i nøkkelkvalifikasjoner.</button>,
-        window.document.body
-      )}
-      {createPortal(<span className="preview-pencil-cursor" ref={previewPencilCursorRef} aria-hidden="true" />, window.document.body)}
     </aside>
   );
 }
@@ -959,30 +919,9 @@ function NewTabIcon() {
   </svg>;
 }
 
-function QualificationHighlightEntries({ highlights, inlineMetadata, overrides, onTextChange, onDescriptionVariantChange, onFieldVisibilityChange, onMove, sortingEnabled, editingEntryAnchorId, onEditingEntryChange }: { highlights: QualificationHighlight[]; inlineMetadata: boolean; onMove: (highlightId: string, direction: -1 | 1) => void; sortingEnabled: boolean; editingEntryAnchorId: string | null; onEditingEntryChange: (anchorId: string | null) => void } & Pick<Props, 'overrides' | 'onTextChange' | 'onDescriptionVariantChange' | 'onFieldVisibilityChange'>) {
-  const text = (key: string, fallback: string) => overrides.text[key] ?? fallback;
-  return <div className="qualification-preview-list">
-    {highlights.map((highlight, index) => highlight.entry
-      ? <PreviewEntry key={highlight.id} entry={highlight.entry} anchorId={`qualification:${highlight.id}`} overridePrefix={`qualification.${highlight.id}`} inlineMetadata={inlineMetadata} overrides={overrides} onTextChange={onTextChange} onDescriptionVariantChange={onDescriptionVariantChange} onFieldVisibilityChange={onFieldVisibilityChange} editingEntryAnchorId={editingEntryAnchorId} onEditingEntryChange={onEditingEntryChange} orderControls={sortingEnabled ? { canMoveUp: index > 0, canMoveDown: index < highlights.length - 1, onMove: direction => onMove(highlight.id, direction) } : undefined} />
-      : (
-      <div className="preview-entry-sort-zone" key={highlight.id}>
-        {sortingEnabled && <EntryOrderControls anchorId={`qualification:${highlight.id}`} canMoveUp={index > 0} canMoveDown={index < highlights.length - 1} onMove={direction => onMove(highlight.id, direction)} label={highlight.title} />}
-        <article className="preview-entry qualification-preview-entry preview-entry-editable" data-preview-entry-anchor={`qualification:${highlight.id}`}>
-          <h4><EditableText value={text(`qualification.${index}.title`, highlight.title)} onChange={value => onTextChange(`qualification.${index}.title`, value)} /></h4>
-          {highlight.subtitle && <p className="preview-entry-meta"><EditableText value={text(`qualification.${index}.subtitle`, highlight.subtitle)} onChange={value => onTextChange(`qualification.${index}.subtitle`, value)} /></p>}
-          {highlight.description && <p className="preview-entry-description">
-            {highlight.descriptionLines?.length && !Object.prototype.hasOwnProperty.call(overrides.text, `qualification.${index}.description`)
-              ? <RichTextLines lines={highlight.descriptionLines} />
-              : <EditableText value={text(`qualification.${index}.description`, highlight.description)} onChange={value => onTextChange(`qualification.${index}.description`, value)} multiline />}
-          </p>}
-        </article>
-      </div>
-    ))}
-  </div>;
-}
-
 function EntryOrderControls({ anchorId, canMoveUp, canMoveDown, onMove, label }: EntryOrderControlProps & { anchorId: string; label: string }) {
   const hideTimerRef = useRef<number | null>(null);
+  const positionFrameRef = useRef<number | null>(null);
   const controlsRef = useRef<HTMLSpanElement>(null);
   const [visible, setVisible] = useState(false);
   const [position, setPosition] = useState<{ top: number; right: number; height: number } | null>(null);
@@ -1000,13 +939,17 @@ function EntryOrderControls({ anchorId, canMoveUp, canMoveDown, onMove, label }:
   }
 
   function updatePosition() {
-    const anchor = window.document.querySelector<HTMLElement>(`[data-preview-entry-anchor="${CSS.escape(anchorId)}"]`);
-    const zone = anchor?.closest<HTMLElement>('.preview-entry-sort-zone');
-    if (!anchor || !zone) return;
-    const anchorBounds = anchor.getBoundingClientRect();
-    const zoneBounds = zone.getBoundingClientRect();
-    const next = { top: anchorBounds.top + anchorBounds.height / 2, right: window.innerWidth - zoneBounds.left + 7, height: anchorBounds.height };
-    setPosition(current => current?.top === next.top && current.right === next.right && current.height === next.height ? current : next);
+    if (positionFrameRef.current !== null) return;
+    positionFrameRef.current = window.requestAnimationFrame(() => {
+      positionFrameRef.current = null;
+      const anchor = window.document.querySelector<HTMLElement>(`[data-preview-entry-anchor="${CSS.escape(anchorId)}"]`);
+      const zone = anchor?.closest<HTMLElement>('.preview-entry-sort-zone');
+      if (!anchor || !zone) return;
+      const anchorBounds = anchor.getBoundingClientRect();
+      const zoneBounds = zone.getBoundingClientRect();
+      const next = { top: anchorBounds.top + anchorBounds.height / 2, right: window.innerWidth - zoneBounds.left + 7, height: anchorBounds.height };
+      setPosition(current => current?.top === next.top && current.right === next.right && current.height === next.height ? current : next);
+    });
   }
 
   // Position once for this anchor. Resize/scroll and reorder completion are
@@ -1055,6 +998,7 @@ function EntryOrderControls({ anchorId, canMoveUp, canMoveDown, onMove, label }:
 
   useEffect(() => () => {
     if (hideTimerRef.current !== null) window.clearTimeout(hideTimerRef.current);
+    if (positionFrameRef.current !== null) window.cancelAnimationFrame(positionFrameRef.current);
   }, []);
 
   if (!position) return null;
@@ -1136,10 +1080,10 @@ function PreviewSection({ section, allSections, inlineMetadata, showTitleIcons, 
   const primaryEntryId = fullSection.entries[0]?.id;
   const isPrimaryFragment = primaryEntryId ? section.entries.some(entry => entry.id === primaryEntryId) : false;
   return (
-    <section className="preview-section-group">
-      {sortingEnabled
+    <section className={`preview-section-group ${isPrimaryFragment ? '' : 'is-continuation'}`}>
+      {isPrimaryFragment && (sortingEnabled
         ? <CategoryTabWithOrderControls title={section.title} icon={getSectionIcon(section)} showIcon={showTitleIcons} layoutAnchorId={isPrimaryFragment ? `section-title:${section.id}` : undefined} canMoveUp={sectionIndex > 0} canMoveDown={sectionIndex >= 0 && sectionIndex < sortableSections.length - 1} onMove={direction => onMoveSection(section.id, direction)} />
-        : <div className="preview-category-tab-wrap" data-preview-layout-anchor={isPrimaryFragment ? `section-title:${section.id}` : undefined}><Tab title={section.title} icon={getSectionIcon(section)} showIcon={showTitleIcons} /></div>}
+        : <div className="preview-category-tab-wrap" data-preview-layout-anchor={`section-title:${section.id}`}><Tab title={section.title} icon={getSectionIcon(section)} showIcon={showTitleIcons} /></div>)}
       <main className="cv-content">
         {section.entries.map(entry => {
           const entryIndex = fullSection.entries.findIndex(candidate => candidate.id === entry.id);
@@ -1152,10 +1096,10 @@ function PreviewSection({ section, allSections, inlineMetadata, showTitleIcons, 
 
 type EntryOrderControlProps = { canMoveUp: boolean; canMoveDown: boolean; onMove: (direction: -1 | 1) => void };
 
-function PreviewEntry({ entry, sectionKind, anchorId, overridePrefix, inlineMetadata = false, overrides, onTextChange, onDescriptionVariantChange, onFieldVisibilityChange, orderControls, editingEntryAnchorId, onEditingEntryChange }: Pick<Props, 'overrides' | 'onTextChange' | 'onDescriptionVariantChange' | 'onFieldVisibilityChange'> & { entry: CvEntry; sectionKind?: CvSection['kind']; anchorId?: string; overridePrefix?: string; inlineMetadata?: boolean; orderControls?: EntryOrderControlProps; editingEntryAnchorId: string | null; onEditingEntryChange: (anchorId: string | null) => void }) {
+function PreviewEntry({ entry, sectionKind, anchorId, inlineMetadata = false, overrides, onTextChange, onDescriptionVariantChange, onFieldVisibilityChange, orderControls, editingEntryAnchorId, onEditingEntryChange }: Pick<Props, 'overrides' | 'onTextChange' | 'onDescriptionVariantChange' | 'onFieldVisibilityChange'> & { entry: CvEntry; sectionKind?: CvSection['kind']; anchorId?: string; inlineMetadata?: boolean; orderControls?: EntryOrderControlProps; editingEntryAnchorId: string | null; onEditingEntryChange: (anchorId: string | null) => void }) {
   const isEditingEntry = Boolean(anchorId && editingEntryAnchorId === anchorId);
-  const entryOverrideKey = overridePrefix ?? `entry.${entry.id}`;
-  const descriptionVariantKey = overridePrefix ?? entry.id;
+  const entryOverrideKey = `entry.${entry.id}`;
+  const descriptionVariantKey = entry.id;
   const text = (field: string, fallback: string) => overrides.text[`${entryOverrideKey}.${field}`] ?? fallback;
   const fieldKey = (field: string) => `${entryOverrideKey}.${field}`;
   const isHidden = (field: string) => overrides.hiddenFields?.[fieldKey(field)] ?? false;
@@ -1167,6 +1111,7 @@ function PreviewEntry({ entry, sectionKind, anchorId, overridePrefix, inlineMeta
   const hasDescriptionOverride = Object.prototype.hasOwnProperty.call(overrides.text, descriptionOverrideKey);
   const description = text('description', defaultDescription);
   const descriptionIsHidden = variantId === '__none__' || isHidden('description');
+  const hasVisibleDescription = !descriptionIsHidden && Boolean(description.trim());
   const isLanguage = sectionKind === 'languages';
   const languageOralLevel = (entry.employmentType || entry.subtitle || entry.organization || '').trim();
   const languageWrittenLevel = (entry.location || languageOralLevel).trim();
@@ -1174,13 +1119,13 @@ function PreviewEntry({ entry, sectionKind, anchorId, overridePrefix, inlineMeta
   const metadata = isLanguage
     ? [languageOralLevel && `Muntlig: ${languageOralLevel}`, languageWrittenLevel && `Skriftlig: ${languageWrittenLevel}`].filter(Boolean).join(' · ')
     : [text('period', formatPeriod(entry)), text('employmentType', entry.employmentType ?? ''), text('location', entry.location ?? '')].filter(Boolean).join(' · ');
-  const useInlineMetadata = inlineMetadata || isEditingEntry;
+  const useInlineMetadata = inlineMetadata;
 
   return (
     <div className="preview-entry-sort-zone">
       {orderControls && anchorId && <EntryOrderControls {...orderControls} anchorId={anchorId} label={entry.title} />}
       <article
-        className={`preview-entry preview-entry-editable ${isEditingEntry ? 'is-editing' : ''}`}
+        className={`preview-entry preview-entry-editable ${hasVisibleDescription ? '' : 'is-single-column'} ${isEditingEntry ? 'is-editing' : ''}`}
         data-entry-id={entry.id}
         data-preview-entry-anchor={anchorId}
         onPointerDown={event => {
@@ -1191,6 +1136,7 @@ function PreviewEntry({ entry, sectionKind, anchorId, overridePrefix, inlineMeta
           if (anchorId) onEditingEntryChange(anchorId);
         }}
       >
+      <div className="preview-entry-heading">
       <PreviewField hidden={isHidden('title')} fieldKey={fieldKey('title')} hiddenLabel="Tittel skjult" isEditingEntry={isEditingEntry} onFieldVisibilityChange={onFieldVisibilityChange}>
         <h4><EditableText value={text('title', entry.title)} onChange={value => onTextChange(`${entryOverrideKey}.title`, value)} editable={isEditingEntry} /></h4>
       </PreviewField>
@@ -1223,6 +1169,8 @@ function PreviewEntry({ entry, sectionKind, anchorId, overridePrefix, inlineMeta
         </>
       )}
 
+      </div>
+      <div className="preview-entry-body">
       <div className="preview-description-editor">
         {isEditingEntry && variants.length > 0 && (
           <div className="preview-description-tabs" aria-label="Velg beskrivelsesversjon">
@@ -1269,6 +1217,7 @@ function PreviewEntry({ entry, sectionKind, anchorId, overridePrefix, inlineMeta
         </PreviewField>
       ))}
 
+      </div>
         {isEditingEntry && <div className="preview-entry-actions">
           <button className="preview-entry-done" type="button" onClick={() => onEditingEntryChange(null)}>Lagre</button>
           <button className="preview-entry-cancel" type="button" onClick={() => onEditingEntryChange(null)}>Avbryt</button>
@@ -1314,7 +1263,8 @@ function EditableText({ value, onChange, multiline = false, className = '', edit
       <span
         ref={editableRef}
         className={`preview-editable preview-editing-text ${className}`}
-        contentEditable
+        contentEditable="plaintext-only"
+        onPaste={pasteText}
         suppressContentEditableWarning
         onBlur={event => {
           onChange(event.currentTarget.innerText.replace(/\n$/, ''));
@@ -1349,6 +1299,7 @@ function linesToText(lines: CvEntry['lines']) {
 
 function formatPeriod(entry: CvEntry) {
   if (!entry.startDate && !entry.endDate && !entry.isCurrent) return '';
+  if (!entry.isCurrent && entry.startDate && entry.endDate && entry.startDate.split('-')[0] === entry.endDate.split('-')[0]) return entry.startDate.split('-')[0];
   return [formatPeriodDate(entry.startDate), entry.isCurrent ? 'nå' : formatPeriodDate(entry.endDate)].filter(Boolean).join(' – ');
 }
 
@@ -1366,7 +1317,7 @@ function getProfileContactRows(profile: CvDocument['profile']) {
     { sourceKey: 'phone', value: profile.phone, icon: 'mdi:phone' },
     { sourceKey: 'email', value: profile.email, icon: 'mdi:email' },
     { sourceKey: 'socialLabel', value: profile.socialLabel, icon: 'mdi:share-variant' }
-  ].map(item => {
+  ].filter(item => item.sourceKey !== 'socialLabel' || profile.personalDetails === undefined || stored.some(detail => detail.sourceKey === item.sourceKey)).map(item => {
     const saved = stored.find(detail => detail.sourceKey === item.sourceKey);
     const savedUrl = saved?.url ?? profile.links?.[item.sourceKey] ?? (item.sourceKey === 'socialLabel' ? profile.socialUrl : '');
     return {
